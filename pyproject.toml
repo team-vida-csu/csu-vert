@@ -1,0 +1,34 @@
+[build-system]
+requires = ["hatchling>=1.22"]
+build-backend = "hatchling.build"
+
+[project]
+name = "csu-vert"
+version = "0.1.0"
+description = "Command-line UNet inference on image folders"
+readme = "README.md"
+license = {text = "CC0"}
+authors = [{name="Nels Motley"}]
+requires-python = ">=3.9"
+
+# runtime dependencies
+dependencies = [
+  "torch==2.2.2",
+  "numpy==1.26.4",
+  "pillow",
+  "tqdm"
+]
+
+[project.scripts]
+csu-vert = "vert.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/vert"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=7.0"
+]
