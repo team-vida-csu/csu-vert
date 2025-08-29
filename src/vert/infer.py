@@ -16,9 +16,50 @@ from vert.io import (
     tile_image,
 )
 
-# Optional imports (only needed if using those paths)
-import torch
+def has_torch():
+    """Return the torch module if available, otherwise None."""
+    try:
+        import torch  # type: ignore
+        return torch
+    except Exception:
+        return None
+    
 
+def require_torch(why: str = "TorchScript (.pt) inference"):
+    """Raise a friendly error if torch isn't available."""
+    torch = has_torch()
+    if torch is None:
+        raise RuntimeError(
+            f"PyTorch is required for {why} but isn't installed.\n"
+            "Install it for your platform:\n"
+            "  • Apple Silicon/macOS:   pip install torch torchvision torchaudio\n"
+            "  • Linux/Windows (CPU):   pip install torch torchvision torchaudio "
+            "--index-url https://download.pytorch.org/whl/cpu\n"
+            "Then re-run your command."
+        )
+    return torch
+
+def _resolve_device(requested: str, prefer_torch: bool) -> str:
+    """
+    Resolve 'auto' to a specific device.
+    If prefer_torch=False (e.g., ONNX path), don't force importing torch.
+    """
+    if requested != "auto":
+        return requested
+
+    if not prefer_torch:
+        # ONNX path: we can just default to CPU without needing torch
+        return "cpu"
+
+    torch = has_torch()
+    if torch is None:
+        return "cpu"
+
+    if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():  # Apple Silicon
+        return "mps"
+    if torch.cuda.is_available():
+        return "cuda"
+    return "cpu"
 # -----------------------
 # Entry point
 # -----------------------
@@ -32,8 +73,8 @@ def run_folder(
     overlap: int = 64,
     batch_size: int = 4,
     amp: bool = False,
-    mean: Optional[Tuple[float, float, float]] = None,
-    std: Optional[Tuple[float, float, float]] = None,
+    mean: Optional[Tuple[float, float, float]] = (0.485, 0.456, 0.406),
+    std: Optional[Tuple[float, float, float]] = (0.229, 0.224, 0.225),
     palette: Optional[List[Tuple[int, int, int]]] = None,
     ext: str = "png",
 ) -> None:
@@ -48,7 +89,7 @@ def run_folder(
         Output folder for predicted masks.
     weights : str
         Path to TorchScript .pt or ONNX .onnx file.
-    device : {"auto","cpu","cuda"}
+    device :  {"auto","cpu","cuda","mps"}
     tile_size : int
     overlap : int
     batch_size : int
@@ -68,15 +109,17 @@ def run_folder(
     out_dir = Path(output)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    if device == "auto":
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-
     wpath = Path(weights)
     if not wpath.exists():
         raise FileNotFoundError(f"Weights not found: {weights}")
 
     is_onnx = wpath.suffix.lower() == ".onnx"
+
+    device = _resolve_device(device, prefer_torch=not is_onnx)
+
     model = _load_model(wpath, device, is_onnx)
+
+
 
     for f in tqdm(files, desc="Inferring"):
         img = load_image_rgb(f)  # (H,W,3), float32 in [0,1]
@@ -117,8 +160,11 @@ def _load_model(wpath: Path, device: str, is_onnx: bool):
     if is_onnx:
         import onnxruntime as ort
         providers = ["CUDAExecutionProvider", "CPUExecutionProvider"] if device == "cuda" else ["CPUExecutionProvider"]
+        # Note: on mac Apple Silicon, ORT GPU is separate from torch; CPU provider works broadly.
         return ort.InferenceSession(str(wpath), providers=providers)
-    # TorchScript
+
+    # TorchScript path: require torch at runtime, not import-time
+    torch = require_torch("loading a TorchScript (.pt) model")
     m = torch.jit.load(str(wpath), map_location=device)
     m.eval()
     return m
@@ -198,6 +244,11 @@ def _forward_batch(tiles: List[np.ndarray],
         inputs = {"image": batch}
         outputs = model.run(None, inputs)[0] 
         return outputs.astype(np.float32)
+
+     # TorchScript path (lazy import)
+    torch = require_torch("TorchScript forward pass")
+    x = torch.from_numpy(batch).to(device)
+
 
     x = torch.from_numpy(batch).to(device)
     with torch.no_grad():

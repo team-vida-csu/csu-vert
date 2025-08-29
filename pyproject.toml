@@ -13,7 +13,6 @@ requires-python = ">=3.9"
 
 # runtime dependencies
 dependencies = [
-  "torch==2.2.2",
   "numpy==1.26.4",
   "pillow",
   "tqdm"
@@ -30,5 +29,7 @@ testpaths = ["tests"]
 
 [project.optional-dependencies]
 dev = [
-  "pytest>=7.0"
+  "pytest>=7.0",
+  "torch==2.2.*",
+  "torchvision==0.17.*",
 ]

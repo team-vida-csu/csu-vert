@@ -1,9 +1,8 @@
-
+# tests/test_infer.py
 from pathlib import Path
 import numpy as np
 from PIL import Image
 import pytest
-import torch
 
 from vert.infer import run_folder
 
@@ -20,6 +19,8 @@ def make_dummy_torchscript(path: Path, in_ch: int = 3, out_ch: int = 2) -> None:
     Create a tiny TorchScript model that maps 3->2 channels with a 1x1 conv.
     Deterministic weights for stable tests.
     """
+    import torch  # import locally so torch isn't required at import time for this file
+
     class Tiny(torch.nn.Module):
         def __init__(self):
             super().__init__()
@@ -37,25 +38,41 @@ def make_dummy_torchscript(path: Path, in_ch: int = 3, out_ch: int = 2) -> None:
     scripted.save(str(path))
 
 
-def make_dummy_onnx(ts_weights: Path, onnx_path: Path, h: int = 32, w: int = 32) -> None:
+def make_dummy_onnx(ts_weights: Path, onnx_path: Path, h: int = 32, width: int = 32) -> None:
     """
-    Export ONNX from the same tiny network shape (dynamic H/W).
+    Export a tiny eager model to ONNX (dynamic H/W).
+    We intentionally avoid wrapping a ScriptModule to keep tracing simple.
     """
-    m = torch.jit.load(str(ts_weights))
-    class Wrapper(torch.nn.Module):
-        def __init__(self, scripted): super().__init__(); self.m = scripted
-        def forward(self, x): return self.m(x)
-    w = Wrapper(m).eval()
+    import torch  # local import
 
-    dummy = torch.randn(1, 3, h, w)
+    class Tiny(torch.nn.Module):
+        def __init__(self, in_ch=3, out_ch=2):
+            super().__init__()
+            self.conv = torch.nn.Conv2d(in_ch, out_ch, kernel_size=1, bias=True)
+            torch.manual_seed(0)
+            with torch.no_grad():
+                self.conv.weight.copy_(torch.randn(out_ch, in_ch, 1, 1) * 0.01)
+                self.conv.bias.zero_()
+
+        def forward(self, x):
+            return self.conv(x)
+
+    model = Tiny().eval()
+
+    dummy = torch.randn(1, 3, h, width)
     torch.onnx.export(
-        w, dummy, str(onnx_path),
+        model,
+        dummy,
+        str(onnx_path),
         opset_version=17,
         input_names=["image"],
         output_names=["logits"],
-        dynamic_axes={"image": {0:"N", 2:"H", 3:"W"},
-                      "logits":{0:"N", 2:"H", 3:"W"}},
+        dynamic_axes={
+            "image": {0: "N", 2: "H", 3: "W"},
+            "logits": {0: "N", 2: "H", 3: "W"},
+        },
     )
+
 
 
 # -----------------------
@@ -75,7 +92,7 @@ def test_run_single_file_torchscript(tmp_path: Path):
         input=str(img_path),
         output=str(outdir),
         weights=str(w),
-        device="auto", 
+        device="auto",
         tile_size=32,
         overlap=8,
         batch_size=2,
@@ -102,12 +119,12 @@ def test_run_glob_torchscript(tmp_path: Path):
 
     outdir = tmp_path / "out"
     run_folder(
-        input=str(d / "*.png"), 
+        input=str(d / "*.png"),
         output=str(outdir),
         weights=str(w),
         device="cpu",
         tile_size=32,
-        overlap=0,              
+        overlap=0,
         batch_size=4,
         amp=False,
     )
@@ -159,14 +176,13 @@ def test_run_directory_torchscript_with_palette(tmp_path: Path):
 # Optional ONNX tests
 # -----------------------
 
-
-
 def test_run_folder_onnx(tmp_path: Path):
     onnxruntime = pytest.importorskip("onnxruntime", reason="onnxruntime not installed")
+
     ts = tmp_path / "dummy.pt"
     make_dummy_torchscript(ts)
     onnx_path = tmp_path / "dummy.onnx"
-    make_dummy_onnx(ts, onnx_path, h=32, w=32)
+    make_dummy_onnx(ts, onnx_path, h=32, width=32)
 
     img = (np.random.rand(45, 50, 3) * 255).astype("uint8")
     img_path = tmp_path / "im.png"
