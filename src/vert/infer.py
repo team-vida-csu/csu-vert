@@ -64,6 +64,28 @@ def _resolve_device(requested: str, prefer_torch: bool) -> str:
 # Entry point
 # -----------------------
 
+def _default_palette(C: int) -> List[Tuple[int, int, int]]:
+    # A small, distinct set; extends deterministically if C>8
+    base = [
+        (0, 0, 0),       # background
+        (230, 25, 75),   # red
+        (60, 180, 75),   # green
+        (0, 130, 200),   # blue
+        (245, 130, 48),  # orange
+        (145, 30, 180),  # purple
+        (70, 240, 240),  # cyan
+        (240, 50, 230),  # magenta
+    ]
+    if C <= len(base):
+        return base[:C]
+    # repeat with a simple permutation if more classes needed
+    out = base[:]
+    rng = np.random.default_rng(42)
+    while len(out) < C:
+        out.append(tuple(int(x) for x in rng.integers(0, 256, size=3)))
+    return out[:C]
+
+
 def run_folder(
     input: str,
     output: str,
@@ -76,6 +98,10 @@ def run_folder(
     mean: Optional[Tuple[float, float, float]] = (0.485, 0.456, 0.406),
     std: Optional[Tuple[float, float, float]] = (0.229, 0.224, 0.225),
     palette: Optional[List[Tuple[int, int, int]]] = None,
+    csv_path: Optional[str] = None,
+    min_class_percent: float = 0.0,
+    suppress_noise: bool = False,
+    class_names: Optional[List[str]] = ("background", "forb", "graminoid", "woody"),
     ext: str = "png",
 ) -> None:
     """
@@ -84,24 +110,30 @@ def run_folder(
     Parameters
     ----------
     input : str
-        Folder, single image path, or glob (absolute or relative).
+        Folder, single image path, or glob.
     output : str
         Output folder for predicted masks.
     weights : str
         Path to TorchScript .pt or ONNX .onnx file.
-    device :  {"auto","cpu","cuda","mps"}
-    tile_size : int
-    overlap : int
-    batch_size : int
-    amp : bool
-        Mixed precision (CUDA only).
+    device : {"auto","cpu","cuda","mps"}
+    tile_size, overlap, batch_size, amp : see CLI help.
     mean, std : Optional[tuple]
-        If provided, images are normalized (x-mean)/std with inputs in [0,1].
+        If given, images are normalized (x-mean)/std with inputs in [0,1].
     palette : Optional[List[RGB]]
         Optional color palette for saved indexed masks.
+    csv_path : Optional[str]
+        If set, write per-image stats to this CSV.
+    min_class_percent : float
+        Treat classes with <= this percent area as noise when --suppress-noise.
+    suppress_noise : bool
+        If True, remap tiny classes to background (0) before saving.
+    class_names : Optional[List[str]]
+        Names for classes used in CSV headers.
     ext : str
-        Output extension: "png" (default) or "tif".
+        Output extension without dot: "png" (default), "jpg", "tif", "tiff".
     """
+    import csv
+
     files = get_image_files(input)
     if not files:
         raise FileNotFoundError(f"No input images found for: {input}")
@@ -114,43 +146,99 @@ def run_folder(
         raise FileNotFoundError(f"Weights not found: {weights}")
 
     is_onnx = wpath.suffix.lower() == ".onnx"
-
     device = _resolve_device(device, prefer_torch=not is_onnx)
-
     model = _load_model(wpath, device, is_onnx)
 
+    csv_writer = None
+    csv_fh = None
+    wrote_header = False
+    try:
+        if csv_path:
+            csv_path = str(csv_path)
+            csv_parent = Path(csv_path).parent
+            if str(csv_parent) and not csv_parent.exists():
+                csv_parent.mkdir(parents=True, exist_ok=True)
+
+        for f in tqdm(files, desc="Inferring"):
+            img = load_image_rgb(f)  # (H,W,3), float32 in [0,1]
+            if mean is not None and std is not None:
+                img = normalize_image(img, mean=mean, std=std)
+
+            logits = _predict_image(
+                img_np=img,
+                model=model,
+                is_onnx=is_onnx,
+                device=device,
+                tile_size=tile_size,
+                overlap=overlap,
+                batch_size=batch_size,
+                amp=amp,
+            )  # (C,H,W) float32
+
+            print(
+                f"{Path(f).name}: C={logits.shape[0]}, logits min/max="
+                f"{float(logits.min()):.3f}/{float(logits.max()):.3f}"
+            )
+
+            # Classes & names
+            C = logits.shape[0]
+            class_names_eff = list(class_names) if class_names is not None else [f"class_{i}" for i in range(C)]
+
+            if len(class_names_eff) != C:
+                raise ValueError(
+                    f"Number of class names ({len(class_names_eff)}) must match number of output channels ({C}).")
+
+            # Palette (auto if not provided)
+            pal_eff = palette if palette is not None else _default_palette(C)
+
+            # Argmax → indices
+            mask_idx = np.argmax(logits, axis=0).astype(np.uint8)  # (H,W)
+            H, W = mask_idx.shape
+            total = H * W
+
+            # Histogram BEFORE suppression
+            counts = np.bincount(mask_idx.ravel(), minlength=C).astype(int)
+            percents = (counts / max(total, 1)) * 100.0
+            print("pred histogram:", dict(enumerate(counts.tolist())))
+
+            # Optional noise suppression
+            if suppress_noise and min_class_percent > 0.0:
+                tiny_classes = [k for k, p in enumerate(percents) if 0 < p <= min_class_percent]
+                if tiny_classes:
+                    m = np.isin(mask_idx, tiny_classes)
+                    mask_idx[m] = 0
+                    # Recompute stats after suppression
+                    counts = np.bincount(mask_idx.ravel(), minlength=C).astype(int)
+                    percents = (counts / max(total, 1)) * 100.0
+
+            # CSV header (write once when we know C)
+            if csv_path and not wrote_header:
+                csv_fh = open(csv_path, "w", newline="")
+                csv_writer = csv.writer(csv_fh)
+                header = ["image", "height", "width", "total_px"]
+                for name in class_names_eff:
+                    header += [f"{name}_px", f"{name}_pct"]
+                csv_writer.writerow(header)
+                wrote_header = True
+
+            # CSV row
+            if csv_writer:
+                row = [Path(f).name, H, W, total]
+                for k in range(C):
+                    row += [int(counts[k]), round(float(percents[k]), 4)]
+                csv_writer.writerow(row)
+
+            # Save mask
+            _save_indexed_mask(
+                mask_idx,
+                out_path=out_dir / f"{Path(f).stem}.{ext}",
+                palette=pal_eff,
+            )
+    finally:
+        if csv_fh:
+            csv_fh.close()
 
 
-    for f in tqdm(files, desc="Inferring"):
-        img = load_image_rgb(f)  # (H,W,3), float32 in [0,1]
-        if mean is not None and std is not None:
-            img = normalize_image(img, mean=mean, std=std)
-
-        logits = _predict_image(
-            img_np=img,
-            model=model,
-            is_onnx=is_onnx,
-            device=device,
-            tile_size=tile_size,
-            overlap=overlap,
-            batch_size=batch_size,
-            amp=amp,
-        )  # (C,H,W) float32
-
-        print(
-            f"{Path(f).name}: C={logits.shape[0]}, logits min/max="
-            f"{float(logits.min()):.3f}/{float(logits.max()):.3f}"
-        )
-        unique, counts = np.unique(np.argmax(logits, axis=0), return_counts=True)
-        print("pred histogram:", dict(zip(unique.tolist(), counts.tolist())))
-
-        palette = [(0,0,0), (255,0,0), (0,255,0), (0,0,255)] 
-        mask_idx = np.argmax(logits, axis=0).astype(np.uint8)  # (H,W)
-        _save_indexed_mask(
-            mask_idx,
-            out_path=out_dir / f"{Path(f).stem}.{ext}",
-            palette=palette,
-        )
 
 # -----------------------
 # Core prediction

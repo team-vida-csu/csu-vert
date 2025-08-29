@@ -43,6 +43,27 @@ def main(argv=None):
         default=[0.229, 0.224, 0.225],
         help="Normalization std (default: ImageNet std 0.229 0.224 0.225)",
     )
+    
+    parser.add_argument(
+        "--csv", default=None,
+        help="If set, write per-image stats to this CSV file."
+    )
+
+    parser.add_argument(
+        "--min-class-percent", type=float, default=0.0,
+        help="Treat classes with <= this percent area as noise (e.g., 0.5 for 0.5%%)."
+    )
+
+    parser.add_argument(
+        "--suppress-noise", action="store_true",
+        help="If set, classes under --min-class-percent are remapped to background (0) in the saved mask."
+    )
+
+    parser.add_argument(
+        "--class-names", default="background,forb,graminoid,woody",
+        help='Comma-separated class names (e.g. "background,forb,graminoid,woody"). '
+            "Used for CSV headers; falls back to class_0..class_{C-1}."
+    )
 
     args = parser.parse_args(argv)
 
@@ -55,6 +76,10 @@ def main(argv=None):
         mean=args.mean,
         std=args.std,
         ext=args.ext,
+        csv_path=args.csv,
+        min_class_percent=args.min_class_percent,
+        suppress_noise=args.suppress_noise,
+        class_names=args.class_names.split(",") if args.class_names else None,
     )
 
 if __name__ == "__main__":
