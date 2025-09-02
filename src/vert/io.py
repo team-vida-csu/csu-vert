@@ -19,7 +19,6 @@ def get_image_files(inp: Union[str, Path]) -> List[Path]:
     Given path to folder return a sorted list of image files. 
     """
     p = Path(inp)
-    print(p.exists())
     if p.exists() and p.is_dir():
         return sorted(q for q in p.rglob("*") if q.suffix.lower() in IMAGE_EXTENTIONS)
     

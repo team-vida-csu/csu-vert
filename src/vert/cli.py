@@ -64,7 +64,21 @@ def main(argv=None):
         help='Comma-separated class names (e.g. "background,forb,graminoid,woody"). '
             "Used for CSV headers; falls back to class_0..class_{C-1}."
     )
+    
+    parser.add_argument(
+        "--side-by-side", action="store_false",
+        help='Disable the side by side image mask comparision for debugging.'
+    )
 
+    parser.add_argument(
+        "--overlay", action="store_true",
+        help='Enable image with prediction overlayed.'
+    )
+
+    parser.add_argument(
+        "--overlay-alpha", default=112, 
+        help="Adjust the alpha of the mask overlayed on the photo."
+    )
     args = parser.parse_args(argv)
 
     
@@ -80,6 +94,9 @@ def main(argv=None):
         min_class_percent=args.min_class_percent,
         suppress_noise=args.suppress_noise,
         class_names=args.class_names.split(",") if args.class_names else None,
+        save_overlay=args.overlay,
+        overlay_alpha=args.overlay_alpha,
+        save_side_by_side=args.side_by_side,
     )
 
 if __name__ == "__main__":

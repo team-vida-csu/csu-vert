@@ -60,6 +60,8 @@ def _resolve_device(requested: str, prefer_torch: bool) -> str:
     if torch.cuda.is_available():
         return "cuda"
     return "cpu"
+
+
 # -----------------------
 # Entry point
 # -----------------------
@@ -103,6 +105,13 @@ def run_folder(
     suppress_noise: bool = False,
     class_names: Optional[List[str]] = ("background", "forb", "graminoid", "woody"),
     ext: str = "png",
+    save_overlay: bool = False,
+    overlay_alpha: int = 112,
+    overlay_suffix: str = "_overlay",
+    save_side_by_side: bool = True,
+    side_by_side_suffix: str = "_side",
+    side_separator_px: int = 6,   # vertical separator width
+    
 ) -> None:
     """
     Run UNet inference over a folder/single-file/glob and save masks.
@@ -228,12 +237,33 @@ def run_folder(
                     row += [int(counts[k]), round(float(percents[k]), 4)]
                 csv_writer.writerow(row)
 
-            # Save mask
+            # Save indexed mask (paletted)
             _save_indexed_mask(
                 mask_idx,
                 out_path=out_dir / f"{Path(f).stem}.{ext}",
                 palette=pal_eff,
             )
+
+            if save_side_by_side:
+                sbs_path = out_dir / f"{Path(f).stem}{side_by_side_suffix}.png"
+                _save_side_by_side(
+                    img_rgb01=img,              # (H,W,3) in [0,1]
+                    mask_idx=mask_idx,          # (H,W) uint8
+                    palette=pal_eff,            # list[(r,g,b)]
+                    out_path=sbs_path,
+                    separator_px=side_separator_px,
+    )
+
+            # Save RGBA overlay (PNG) for quick visual QA
+            if save_overlay:
+                overlay_path = out_dir / f"{Path(f).stem}{overlay_suffix}.png"  # PNG to keep alpha
+                _save_overlay_rgba(
+                    img_rgb01=img,               # original image in [0,1], HxWx3
+                    mask_idx=mask_idx,           # HxW uint8
+                    palette=pal_eff,             # list[(r,g,b)]
+                    out_path=overlay_path,
+                    alpha=overlay_alpha,
+                )
     finally:
         if csv_fh:
             csv_fh.close()
@@ -375,3 +405,67 @@ def _save_indexed_mask(mask_idx: np.ndarray, out_path: Path, palette: Optional[L
         flat += [0] * max(0, 256 * 3 - len(flat))
         out.putpalette(flat, rawmode="RGB")
     out.save(out_path)
+
+def _save_overlay_rgba(
+    img_rgb01: np.ndarray,
+    mask_idx: np.ndarray,
+    palette: List[Tuple[int, int, int]],
+    out_path: Path,
+    alpha: int = 112,
+) -> None:
+    """
+    Blend a colorized mask over the original image and save as PNG (RGBA).
+    - img_rgb01: (H,W,3) float32 in [0,1]
+    - mask_idx : (H,W) uint8, class indices
+    - palette  : list of RGB tuples, index-aligned with classes
+    - alpha    : 0..255 overlay opacity for classes > 0
+    """
+    h, w = mask_idx.shape
+    base = (np.clip(img_rgb01, 0.0, 1.0) * 255.0).astype(np.uint8)
+    base_rgba = Image.fromarray(base, mode="RGB").convert("RGBA")
+
+    # Build a single RGBA overlay in numpy (transparent where class==0)
+    overlay = np.zeros((h, w, 4), dtype=np.uint8)
+    # class 0 stays transparent; colorize classes >= 1
+    for cls_id in range(1, min(len(palette), 256)):
+        r, g, b = palette[cls_id]
+        m = (mask_idx == cls_id)
+        if not m.any():
+            continue
+        overlay[m] = (r, g, b, alpha)
+
+    over_img = Image.fromarray(overlay, mode="RGBA")
+    comp = Image.alpha_composite(base_rgba, over_img)
+    comp.save(out_path)
+
+def _colorize_mask(mask_idx: np.ndarray, palette: List[Tuple[int, int, int]]) -> np.ndarray:
+    """
+    Convert index mask (H,W) to RGB uint8 using palette.
+    """
+    h, w = mask_idx.shape
+    pal_arr = np.zeros((256, 3), dtype=np.uint8)
+    for i, (r, g, b) in enumerate(palette[:256]):
+        pal_arr[i] = (r, g, b)
+    rgb = pal_arr[mask_idx]  # (H,W,3)
+    return rgb
+
+def _save_side_by_side(
+    img_rgb01: np.ndarray,
+    mask_idx: np.ndarray,
+    palette: List[Tuple[int, int, int]],
+    out_path: Path,
+    separator_px: int = 6,
+) -> None:
+    """
+    Save [original | colorized mask] with a thin separator.
+    """
+    h, w = mask_idx.shape
+    left = (np.clip(img_rgb01, 0.0, 1.0) * 255.0).astype(np.uint8)        # (H,W,3)
+    right = _colorize_mask(mask_idx, palette)                              # (H,W,3)
+
+    # vertical separator (neutral gray)
+    sep = np.full((h, separator_px, 3), 200, dtype=np.uint8)
+
+    sbs = np.concatenate([left, sep, right], axis=1)                       # (H, W+sep+W, 3)
+    Image.fromarray(sbs, mode="RGB").save(out_path)
+

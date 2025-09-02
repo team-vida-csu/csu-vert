@@ -96,6 +96,8 @@ def test_run_single_file_torchscript(tmp_path: Path):
         tile_size=32,
         overlap=8,
         batch_size=2,
+        class_names=["test1", "test2"],
+        save_side_by_side=False,
         amp=False,
     )
 
@@ -126,6 +128,8 @@ def test_run_glob_torchscript(tmp_path: Path):
         tile_size=32,
         overlap=0,
         batch_size=4,
+        class_names=["test1", "test2"],
+        save_side_by_side=False,
         amp=False,
     )
 
@@ -159,6 +163,8 @@ def test_run_directory_torchscript_with_palette(tmp_path: Path):
         overlap=4,
         batch_size=2,
         amp=False,
+        class_names=["test1", "test2"],
+        save_side_by_side=False,
         palette=palette,
     )
 
@@ -198,6 +204,8 @@ def test_run_folder_onnx(tmp_path: Path):
         overlap=4,
         batch_size=3,
         amp=False,
+        class_names=["test1", "test2"],
+        save_side_by_side=False,
     )
 
     outs = list(outdir.glob("*.png"))
