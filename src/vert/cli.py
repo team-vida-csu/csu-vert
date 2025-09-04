@@ -51,7 +51,7 @@ def build_parser() -> argparse.ArgumentParser:
     a.add_argument("--suppress-noise", action="store_true",
         help="If set, classes under --min-class-percent are remapped to background (0)")
 
-    a.add_argument("--class-names", default=None,
+    a.add_argument("--class-names", default="background,forb,graminoid,woody",
         help='Comma-separated class names (e.g. "background,forb,graminoid,woody"). '
              "If omitted, uses YAML if available.")
     a.add_argument("--save-mask", action="store_true",
@@ -145,7 +145,7 @@ def main(argv=None):
         print(f"Classes     : {class_names}")
     if palette:
         print(f"Palette     : {len(palette)} colors")
-
+    
     infer.run_folder(
         input=args.input,
         output=args.output,

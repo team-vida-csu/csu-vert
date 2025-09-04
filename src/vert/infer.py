@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import List, Tuple, Optional
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 from tqdm import tqdm
 
 from vert.io import (
@@ -143,7 +143,7 @@ def run_folder(
         Output extension without dot: "png" (default), "jpg", "tif", "tiff".
     """
     import csv
-
+    
     files = get_image_files(input)
     if not files:
         raise FileNotFoundError(f"No input images found for: {input}")
@@ -255,6 +255,7 @@ def run_folder(
                     palette=pal_eff,            # list[(r,g,b)]
                     out_path=sbs_path,
                     separator_px=side_separator_px,
+                    class_names=class_names,
     )
 
             # Save RGBA overlay (PNG) for quick visual QA
@@ -265,6 +266,7 @@ def run_folder(
                     mask_idx=mask_idx,           # HxW uint8
                     palette=pal_eff,             # list[(r,g,b)]
                     out_path=overlay_path,
+                    class_names=class_names,
                     alpha=overlay_alpha,
                 )
     finally:
@@ -452,23 +454,129 @@ def _colorize_mask(mask_idx: np.ndarray, palette: List[Tuple[int, int, int]]) ->
     rgb = pal_arr[mask_idx]  # (H,W,3)
     return rgb
 
+def _try_load_font(px: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
+    # Try a few common fonts; fall back to default bitmap font.
+    for name in ("DejaVuSans-Bold.ttf", "Arial.ttf", "LiberationSans-Bold.ttf"):
+        try:
+            return ImageFont.truetype(name, px)
+        except Exception:
+            pass
+    return ImageFont.load_default()
+
+def _measure_text(draw: ImageDraw.ImageDraw, text: str, font) -> tuple[int, int]:
+    try:
+        x0, y0, x1, y1 = draw.textbbox((0, 0), text, font=font)
+        return (x1 - x0, y1 - y0)
+    except Exception:
+        return font.getsize(text)
+
+def _render_legend_row(
+    palette: list[tuple[int, int, int]],
+    class_names: list[str] | None,
+    width: int,
+    img_height: int,
+    *,
+    legend_height_frac: float = 0.12,     # 12% of image height
+    min_leg_h: int = 80,
+    max_leg_h: int = 240,
+    skip_bg_index: int | None = None,     # e.g., 0 to hide background
+) -> Image.Image:
+    """
+    Responsive horizontal legend bar: big font, wide swatches, evenly spaced.
+    """
+    # Optionally drop background entry
+    indices = list(range(len(palette)))
+    if skip_bg_index is not None and 0 <= skip_bg_index < len(indices):
+        indices.pop(skip_bg_index)
+
+    n = max(1, len(indices))
+    # Legend height scales with image height, clamped
+    leg_h = int(max(min(img_height * legend_height_frac, max_leg_h), min_leg_h))
+
+    # Canvas
+    legend = Image.new("RGB", (width, leg_h), (255, 255, 255))
+    draw = ImageDraw.Draw(legend)
+
+    # Slot per class
+    slot_w = width // n
+
+    # Swatch & text sizing (relative to legend height)
+    swatch_h = int(leg_h * 0.45)
+    swatch_w = int(swatch_h * 1.6)        # wider than tall for readability
+    base_font_px = int(leg_h * 0.34)      # start big
+    font = _try_load_font(base_font_px)
+
+    pad_y = int(leg_h * 0.12)
+
+    for k, cls_idx in enumerate(indices):
+        name = (class_names[cls_idx] if class_names and cls_idx < len(class_names)
+                else f"class_{cls_idx}")
+        color = tuple(int(c) for c in palette[cls_idx])
+
+        # Center of this slot
+        cx = k * slot_w + slot_w // 2
+
+        # Lay out swatch near top, text below it
+        sw_y0 = pad_y
+        sw_y1 = sw_y0 + swatch_h
+        sw_x0 = cx - swatch_w // 2
+        sw_x1 = sw_x0 + swatch_w
+
+        # Ensure text fits; shrink font until it does (within reason)
+        font_px = base_font_px
+        font = _try_load_font(font_px)
+        tw, th = _measure_text(draw, name, font)
+        max_text_w = int(slot_w * 0.9)
+        while tw > max_text_w and font_px > 10:
+            font_px = int(font_px * 0.9)
+            font = _try_load_font(font_px)
+            tw, th = _measure_text(draw, name, font)
+
+        # Text position
+        tx = cx - tw // 2
+        ty = sw_y1 + max(4, int(leg_h * 0.04))
+
+        # Draw swatch (with border)
+        draw.rectangle([sw_x0, sw_y0, sw_x1, sw_y1], fill=color, outline=(0, 0, 0), width=3)
+
+        # Draw label
+        draw.text((tx, ty), name, fill=(0, 0, 0), font=font)
+
+    # Top separator line
+    draw.line([(0, 0), (width, 0)], fill=(200, 200, 200), width=1)
+    return legend
+
 def _save_side_by_side(
-    img_rgb01: np.ndarray,
-    mask_idx: np.ndarray,
-    palette: List[Tuple[int, int, int]],
+    img_rgb01: np.ndarray,                 # ORIGINAL image in [0,1]
+    mask_idx: np.ndarray,                  # (H,W) uint8
+    palette: list[tuple[int, int, int]],
     out_path: Path,
+    class_names: list[str] | None = None,
     separator_px: int = 6,
+    add_legend: bool = True,
+    skip_bg_in_legend: bool = False,
 ) -> None:
     """
-    Save [original | colorized mask] with a thin separator.
+    Save [original | colorized mask] with big, responsive legend at the bottom.
     """
     h, w = mask_idx.shape
-    left = (np.clip(img_rgb01, 0.0, 1.0) * 255.0).astype(np.uint8)        # (H,W,3)
-    right = _colorize_mask(mask_idx, palette)                              # (H,W,3)
+    left = (np.clip(img_rgb01, 0.0, 1.0) * 255.0).astype(np.uint8)
+    right = _colorize_mask(mask_idx, palette)
 
-    # vertical separator (neutral gray)
     sep = np.full((h, separator_px, 3), 200, dtype=np.uint8)
+    sbs = np.concatenate([left, sep, right], axis=1)
+    sbs_img = Image.fromarray(sbs, mode="RGB")
 
-    sbs = np.concatenate([left, sep, right], axis=1)                       # (H, W+sep+W, 3)
-    Image.fromarray(sbs, mode="RGB").save(out_path)
+    if add_legend:
+        legend = _render_legend_row(
+            palette, class_names, width=sbs_img.width, img_height=sbs_img.height,
+            legend_height_frac=0.12,          # bump to 0.15 if you want even larger
+            skip_bg_index=0 if skip_bg_in_legend else None,
+        )
+        out = Image.new("RGB", (sbs_img.width, sbs_img.height + legend.height), (255, 255, 255))
+        out.paste(sbs_img, (0, 0))
+        out.paste(legend, (0, sbs_img.height))
+    else:
+        out = sbs_img
 
+    out.save(out_path)
