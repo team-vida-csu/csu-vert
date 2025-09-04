@@ -14,8 +14,7 @@ It supports tiling with overlap, Gaussian blending, palette-based mask outputs, 
 ### Core install (no inference backend)
 
 ```bash
-# in folder with downloaded source code.
-pip install -e ".[onnx]"
+pip install git+https://github.com/team-vida-csu/csu-vert.git
 ```
 ### If you want to run TorchScript (.pt) models instead of ONNX, install with torch:
 ~~~
