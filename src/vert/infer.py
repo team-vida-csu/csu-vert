@@ -70,9 +70,9 @@ def _default_palette(C: int) -> List[Tuple[int, int, int]]:
     # A small, distinct set; extends deterministically if C>8
     base = [
         (0, 0, 0),       # background
-        (230, 25, 75),   # red
-        (60, 180, 75),   # green
-        (0, 130, 200),   # blue
+        (74, 222, 128),  # green
+        (96, 165, 250),  # blue
+        (221, 255, 51),  # yellow
         (245, 130, 48),  # orange
         (145, 30, 180),  # purple
         (70, 240, 240),  # cyan
@@ -105,6 +105,7 @@ def run_folder(
     suppress_noise: bool = False,
     class_names: Optional[List[str]] = ("background", "forb", "graminoid", "woody"),
     ext: str = "png",
+    save_mask: bool = False,
     save_overlay: bool = False,
     overlay_alpha: int = 112,
     overlay_suffix: str = "_overlay",
@@ -170,6 +171,7 @@ def run_folder(
 
         for f in tqdm(files, desc="Inferring"):
             img = load_image_rgb(f)  # (H,W,3), float32 in [0,1]
+            img_orig = img.copy() 
             if mean is not None and std is not None:
                 img = normalize_image(img, mean=mean, std=std)
 
@@ -238,16 +240,17 @@ def run_folder(
                 csv_writer.writerow(row)
 
             # Save indexed mask (paletted)
-            _save_indexed_mask(
-                mask_idx,
-                out_path=out_dir / f"{Path(f).stem}.{ext}",
-                palette=pal_eff,
-            )
+            if save_mask:
+                _save_indexed_mask(
+                    mask_idx,
+                    out_path=out_dir / f"{Path(f).stem}.{ext}",
+                    palette=pal_eff,
+                )
 
             if save_side_by_side:
                 sbs_path = out_dir / f"{Path(f).stem}{side_by_side_suffix}.png"
                 _save_side_by_side(
-                    img_rgb01=img,              # (H,W,3) in [0,1]
+                    img_rgb01=img_orig,              # (H,W,3) in [0,1]
                     mask_idx=mask_idx,          # (H,W) uint8
                     palette=pal_eff,            # list[(r,g,b)]
                     out_path=sbs_path,
@@ -258,7 +261,7 @@ def run_folder(
             if save_overlay:
                 overlay_path = out_dir / f"{Path(f).stem}{overlay_suffix}.png"  # PNG to keep alpha
                 _save_overlay_rgba(
-                    img_rgb01=img,               # original image in [0,1], HxWx3
+                    img_rgb01=img_orig,               # original image in [0,1], HxWx3
                     mask_idx=mask_idx,           # HxW uint8
                     palette=pal_eff,             # list[(r,g,b)]
                     out_path=overlay_path,

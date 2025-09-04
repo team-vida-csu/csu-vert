@@ -2,3 +2,9 @@ application_venv/
 final310_smp_scripted.pt
 final310onnx.onnx
 test_images/
+vert-unet_resnet34_4cls_scripted.pt
+vert-model.yaml.sha256
+vert-model.yaml
+vert-unet_resnet34_4cls_scripted.pt.sha256
+vert-unet_resnet34_4cls.onnx
+vert-unet_resnet34_4cls.onnx.sha256
