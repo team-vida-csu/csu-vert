@@ -18,7 +18,7 @@ It supports tiling with overlap, Gaussian blending, palette-based mask outputs, 
 pip install "csu-vert[onnx] @ git+https://github.com/team-vida-csu/csu-vert.git"
 
 # Specific tag
-pip install "csu-vert[torch] @ git+https://github.com/team-vida-csu/csu-vert.git@v0.1.0"
+pip install "csu-vert[torch] @ git+https://github.com/team-vida-csu/csu-vert.git@v0.0.1"
 ```
 ### If you want to run TorchScript (.pt) models instead of ONNX, install with torch:
 ~~~
