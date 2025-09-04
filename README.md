@@ -2,7 +2,7 @@
 ### (Convolutional Segmentation for Understory VEgetation Recognition and Typing)
 
 This project provides a lightweight CLI (`csu-vert`) to run semantic segmentation on images using trained UNet models (TorchScript or ONNX). 
-It supports tiling with overlap, Gaussian blending, palette-based mask outputs, and per-image vegetation statistics exported to CSV. The current models are trained on the ![CSU-VERT Dataset](https://www.kaggle.com/datasets/zarl132/csu-vert-data/data).
+It supports tiling with overlap, Gaussian blending, palette-based mask outputs, and per-image vegetation statistics exported to CSV. The current models are trained on the [CSU-VERT Dataset](https://www.kaggle.com/datasets/zarl132/csu-vert-data/data).
 
 ![segmented image](https://github.com/team-vida-csu/csu-vert/blob/main/src/vert/images/githubdemo_photo.png)
 
