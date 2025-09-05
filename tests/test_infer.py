@@ -3,7 +3,6 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 import pytest
-import importlib.util
 
 from vert.infer import run_folder
 
