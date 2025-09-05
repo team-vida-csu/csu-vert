@@ -2,7 +2,9 @@
 ### (Convolutional Segmentation for Understory VEgetation Recognition and Typing)
 
 This project provides a lightweight CLI (`csu-vert`) to run semantic segmentation on images using trained UNet models (TorchScript or ONNX). 
-It supports tiling with overlap, Gaussian blending, palette-based mask outputs, and per-image vegetation statistics exported to CSV.
+It supports tiling with overlap, Gaussian blending, palette-based mask outputs, and per-image vegetation statistics exported to CSV. The current models are trained on the [CSU-VERT Dataset](https://www.kaggle.com/datasets/zarl132/csu-vert-data/data).
+
+![segmented image](https://github.com/team-vida-csu/csu-vert/blob/main/src/vert/images/githubdemo_photo.png)
 
 ## Installation
 
@@ -12,29 +14,46 @@ It supports tiling with overlap, Gaussian blending, palette-based mask outputs, 
 ### Core install (no inference backend)
 
 ```bash
-# in folder with downloaded source code.
-pip install -e ".[onnx]"
+# Latest main
+pip install "csu-vert[onnx] @ git+https://github.com/team-vida-csu/csu-vert.git"
+
+# Specific tag
+pip install "csu-vert[torch] @ git+https://github.com/team-vida-csu/csu-vert.git@v0.0.1"
 ```
+### If you want to run TorchScript (.pt) models instead of ONNX, install with torch:
+~~~
+pip install torch torchvision torchaudio
+~~~
 ## Usage
-### Basic example
+The CLI has subcommands:
+- **infer** -> run inference on a folder / file / glob
+- **list-models** -> list registered downladable models
+- **precache** -> download & cache weights/config without running inference
+### Run inference with auto-downloaded weights
 ~~~
-csu-vert \
-  --input path/to/images/*.png \
-  --output out_masks/ \
-  --weights unet.onnx \
-  --device auto
+csu-vert infer \
+  --input images/*.png \
+  --output preds/ \
+  --weights auto:unet-r34-4c@v0.0.2 --format onnx
 ~~~
-- **--input** can be a folder, single file, or glob pattern
-- **--weights** can be TorchScript (.pt) or ONNX (.onnx)
-- **--device** can be auto, cpu, cuda, or mps
-### With vegetation stats (CSV)
+This will:
+- Download the weights + config file if missing (cached under **~/.cache/vert/…**)
+- Run inference using the Onnx model
+- Save masks to **preds/**
+### Run inference with local weights
 ~~~
-csu-vert \
+csu-vert infer \
   --input images/ \
   --output preds/ \
-  --weights unet.onnx \
+  --weights ./models/vert-unet_resnet34_4cls_scripted.pt
+~~~
+### With vegetation stats (CSV)
+~~~
+csu-vert infer \
+  --input images/ \
+  --output preds/ \
+  --weights auto:unet-r34-4c@v0.0.2 \
   --csv stats.csv \
-  --class-names background,forb,graminoid,woody \
   --suppress-noise \
   --min-class-percent 0.5
 ~~~
@@ -42,24 +61,40 @@ This will:
 - Save indexed masks to **preds/**
 - Write a CSV with per-class pixel counts and percentages for each image
 - Suppress classes that cover ≤0.5% of pixels, remapping them to background
+### List available models
+~~~
+csu-vert list-models
+~~~
+### Pre-cache weights before inference
+~~~
+csu-vert precache \
+  --weights auto:unet-r34-4c@v0.0.2 --format onnx
+~~~
 
 ## Options
+### Inference flags
 
-| Flag                  | Description                                                      |
-| --------------------- | ---------------------------------------------------------------- |
-| `-i, --input`         | Input folder, file, or glob                                      |
-| `-o, --output`        | Output folder for masks                                          |
-| `-w, --weights`       | Path to `.pt` or `.onnx` model                                   |
-| `--device`            | `auto`, `cpu`, `cuda`, or `mps`                                  |
-| `--tile-size`         | Size of image tiles (default 512)                                |
-| `--overlap`           | Overlap between tiles (default 64)                               |
-| `--batch-size`        | Number of tiles per forward pass                                 |
-| `--mean` / `--std`    | Normalization values (default: ImageNet)                         |
-| `--csv`               | Path to CSV for per-image stats                                  |
-| `--class-names`       | Comma-separated names (default: background,forb,graminoid,woody) |
-| `--suppress-noise`    | If set, remap tiny classes to background                         |
-| `--min-class-percent` | Threshold % for noise suppression                                |
-| `--ext`               | Output extension: `png` (default), `jpg`, `tif`                  |
+| Flag                  | Description                                                    |
+| --------------------- | -------------------------------------------------------------- |
+| `-i, --input`         | Input folder, file, or glob                                    |
+| `-o, --output`        | Output folder for masks                                        |
+| `-w, --weights`       | Local path to `.pt`/`.onnx` or remote spec (`auto:…` / `gh:…`) |
+| `--format`            | Preferred format when using `auto:` (`pt` or `onnx`)           |
+| `--device`            | `auto`, `cpu`, `cuda`, or `mps`                                |
+| `--tile-size`         | Size of image tiles (default 512)                              |
+| `--overlap`           | Overlap between tiles (default 64)                             |
+| `--batch-size`        | Number of tiles per forward pass                               |
+| `--amp`               | Enable mixed precision (CUDA/MPS only)                         |
+| `--mean` / `--std`    | Normalization values (default: ImageNet or from YAML)          |
+| `--csv`               | Path to CSV for per-image stats                                |
+| `--class-names`       | Comma-separated names (default or from YAML)                   |
+| `--suppress-noise`    | Remap small classes to background                              |
+| `--min-class-percent` | Threshold % for noise suppression                              |
+| `--ext`               | Output extension: `png` (default), `jpg`, `tif`                |
+| `--side-by-side`      | Save original + mask comparison with legend                    |
+| `--overlay`           | Save overlay image (mask blended over original)                |
+| `--overlay-alpha`     | Alpha for overlay (0–255, default 112)                         |
+
 
 ## Development
 ### Clone & install locally
