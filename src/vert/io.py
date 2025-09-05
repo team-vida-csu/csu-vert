@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Iterable, Iterator, List, Optional, Sequence, Tuple, Union
+from typing import  Iterator, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 from PIL import Image

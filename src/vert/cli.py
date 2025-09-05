@@ -1,6 +1,6 @@
 import argparse
 import sys
-from typing import Optional, List, Tuple
+from typing import Optional, List
 
 from . import infer
 from .weights import resolve_weights, list_models, precache  # <- wire weights.py
@@ -126,7 +126,8 @@ def main(argv=None):
     if args.cmd == "precache":
         w, y = precache(args.weights, preferred_format=args.format)
         print(f"Cached weights: {w}")
-        if y: print(f"Cached config: {y}")
+        if y: 
+            print(f"Cached config: {y}")
         return 0
 
     # default: infer

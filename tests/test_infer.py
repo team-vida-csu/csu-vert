@@ -186,7 +186,7 @@ def test_run_directory_torchscript_with_palette(tmp_path: Path):
 # -----------------------
 
 def test_run_folder_onnx(tmp_path: Path):
-    onnxruntime = pytest.importorskip("onnxruntime", reason="onnxruntime not installed")
+    pytest.importorskip("onnxruntime", reason="onnxruntime not installed")
 
     ts = tmp_path / "dummy.pt"
     make_dummy_torchscript(ts)
