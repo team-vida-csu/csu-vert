@@ -49,6 +49,8 @@ dev = [
   "pytest-cov>=4",
   "ruff>=0.5",
   "mypy>=1.8",
+  "types-requests",
+  "types-tqdm",
 ]
 
 [tool.hatch.build.targets.wheel]
