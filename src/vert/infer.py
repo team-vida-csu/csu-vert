@@ -81,7 +81,8 @@ def _default_palette(C: int) -> List[Tuple[int, int, int]]:
     out = base[:]
     rng = np.random.default_rng(42)
     while len(out) < C:
-        out.append(tuple(int(x) for x in rng.integers(0, 256, size=3)))
+        rgb: tuple[int, int, int] = tuple(rng.integers(0, 256, size=3).tolist())
+        out.append(rgb)
     return out[:C]
 
 
@@ -100,7 +101,7 @@ def run_folder(
     csv_path: Optional[str] = None,
     min_class_percent: float = 0.0,
     suppress_noise: bool = False,
-    class_names: Optional[List[str]] = ("background", "forb", "graminoid", "woody"),
+    class_names: Optional[List[str]] = ["background", "forb", "graminoid", "woody"],
     ext: str = "png",
     save_mask: bool = False,
     save_overlay: bool = False,
@@ -263,7 +264,6 @@ def run_folder(
                     mask_idx=mask_idx,           # HxW uint8
                     palette=pal_eff,             # list[(r,g,b)]
                     out_path=overlay_path,
-                    class_names=class_names,
                     alpha=overlay_alpha,
                 )
     finally:
@@ -278,7 +278,7 @@ def run_folder(
 
 def _load_model(wpath: Path, device: str, is_onnx: bool):
     if is_onnx:
-        import onnxruntime as ort
+        import onnxruntime as ort  # type: ignore[import-untyped]
         providers = ["CUDAExecutionProvider", "CPUExecutionProvider"] if device == "cuda" else ["CPUExecutionProvider"]
         # Note: on mac Apple Silicon, ORT GPU is separate from torch; CPU provider works broadly.
         return ort.InferenceSession(str(wpath), providers=providers)
@@ -463,7 +463,7 @@ def _try_load_font(px: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
 def _measure_text(draw: ImageDraw.ImageDraw, text: str, font) -> tuple[int, int]:
     try:
         x0, y0, x1, y1 = draw.textbbox((0, 0), text, font=font)
-        return (x1 - x0, y1 - y0)
+        return (int(x1 - x0), int(y1 - y0))
     except Exception:
         return font.getsize(text)
 

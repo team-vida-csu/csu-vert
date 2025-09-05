@@ -119,6 +119,7 @@ def _resolve_auto(
     key_ox = (model_id + "-onnx", version)
 
     # choose entry
+    key: Optional[Tuple[str, str]]
     if preferred_format == "pt" and key_pt in MODELS:
         key = key_pt
     elif preferred_format == "onnx" and key_ox in MODELS:

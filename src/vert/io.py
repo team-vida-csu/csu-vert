@@ -45,9 +45,9 @@ def normalize_image(img: np.ndarray, mean: Optional[Sequence[float]] = None, std
     """
     if mean is None or std is None:
         return img
-    mean = np.asarray(mean, dtype=np.float32).reshape(1, 1, 3)
-    std = np.asarray(std, dtype=np.float32).reshape(1, 1, 3)
-    return (img - mean) / std
+    mean_arr = np.asarray(mean, dtype=np.float32).reshape(1, 1, 3)
+    std_arr = np.asarray(std, dtype=np.float32).reshape(1, 1, 3)
+    return (img - mean_arr) / std_arr
 
 #---------------------------------------------
 #Handle image titling
