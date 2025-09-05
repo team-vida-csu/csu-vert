@@ -3,6 +3,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 import pytest
+import importlib.util
 
 from vert.infer import run_folder
 
@@ -19,7 +20,7 @@ def make_dummy_torchscript(path: Path, in_ch: int = 3, out_ch: int = 2) -> None:
     Create a tiny TorchScript model that maps 3->2 channels with a 1x1 conv.
     Deterministic weights for stable tests.
     """
-    import torch  # import locally so torch isn't required at import time for this file
+    torch = pytest.importorskip("torch", reason="torch not installed")
 
     class Tiny(torch.nn.Module):
         def __init__(self):
@@ -78,7 +79,7 @@ def make_dummy_onnx(ts_weights: Path, onnx_path: Path, h: int = 32, width: int =
 # -----------------------
 # Tests (TorchScript)
 # -----------------------
-
+@pytest.mark.torch_required
 def test_run_single_file_torchscript(tmp_path: Path):
     w = tmp_path / "dummy.pt"
     make_dummy_torchscript(w)
@@ -108,7 +109,7 @@ def test_run_single_file_torchscript(tmp_path: Path):
     assert out_im.size == (img.shape[1], img.shape[0])  # (W,H)
     assert out_im.mode == "P"
 
-
+@pytest.mark.torch_required
 def test_run_glob_torchscript(tmp_path: Path):
     w = tmp_path / "dummy.pt"
     make_dummy_torchscript(w)
@@ -142,7 +143,7 @@ def test_run_glob_torchscript(tmp_path: Path):
     assert sizes[0] == (48, 48)
     assert sizes[1] == (40, 64)
 
-
+@pytest.mark.torch_required
 def test_run_directory_torchscript_with_palette(tmp_path: Path):
     w = tmp_path / "dummy.pt"
     make_dummy_torchscript(w)
