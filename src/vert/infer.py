@@ -1,6 +1,6 @@
 
 from pathlib import Path
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Union
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
@@ -451,7 +451,7 @@ def _colorize_mask(mask_idx: np.ndarray, palette: List[Tuple[int, int, int]]) ->
     rgb = pal_arr[mask_idx]  # (H,W,3)
     return rgb
 
-def _try_load_font(px: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
+def _try_load_font(px: int) -> Union[ImageFont.FreeTypeFont, ImageFont.ImageFont]:
     # Try a few common fonts; fall back to default bitmap font.
     for name in ("DejaVuSans-Bold.ttf", "Arial.ttf", "LiberationSans-Bold.ttf"):
         try:
@@ -460,7 +460,7 @@ def _try_load_font(px: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
             pass
     return ImageFont.load_default()
 
-def _measure_text(draw: ImageDraw.ImageDraw, text: str, font) -> tuple[int, int]:
+def _measure_text(draw: ImageDraw.ImageDraw, text: str, font) -> Tuple[int, int]:
     try:
         x0, y0, x1, y1 = draw.textbbox((0, 0), text, font=font)
         return (int(x1 - x0), int(y1 - y0))
@@ -468,15 +468,15 @@ def _measure_text(draw: ImageDraw.ImageDraw, text: str, font) -> tuple[int, int]
         return font.getsize(text)
 
 def _render_legend_row(
-    palette: list[tuple[int, int, int]],
-    class_names: list[str] | None,
+    palette: List[tuple[int, int, int]],
+    class_names: Optional[List[str]],
     width: int,
     img_height: int,
     *,
     legend_height_frac: float = 0.12,     # 12% of image height
     min_leg_h: int = 80,
     max_leg_h: int = 240,
-    skip_bg_index: int | None = None,     # e.g., 0 to hide background
+    skip_bg_index: Optional[int] = None,     # e.g., 0 to hide background
 ) -> Image.Image:
     """
     Responsive horizontal legend bar: big font, wide swatches, evenly spaced.
@@ -548,7 +548,7 @@ def _save_side_by_side(
     mask_idx: np.ndarray,                  # (H,W) uint8
     palette: list[tuple[int, int, int]],
     out_path: Path,
-    class_names: list[str] | None = None,
+    class_names: Optional[List[str]] = None,
     separator_px: int = 6,
     add_legend: bool = True,
     skip_bg_in_legend: bool = False,
