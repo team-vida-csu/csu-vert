@@ -1,7 +1,5 @@
-import io
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
-import builtins
 import pytest
 
 # Import the module that defines main()/build_parser()
@@ -101,8 +99,10 @@ def test_infer_required_args_pass(mock_infer, mock_weights, tmp_path):
     ("--suppress-noise",   "suppress_noise", True),
 ])
 def test_boolean_flags_true(mock_infer, mock_weights, tmp_path, flag, expect_key, expect_val):
-    imgs = (tmp_path / "imgs"); imgs.mkdir()
-    out = (tmp_path / "out"); out.mkdir()
+    imgs = (tmp_path / "imgs") 
+    imgs.mkdir()
+    out = (tmp_path / "out")
+    out.mkdir()
     rc = run_cli([
         "infer", "-i", str(imgs), "-o", str(out),
         "-w", "auto:unet-r34-4c@v0.0.2",
@@ -114,8 +114,10 @@ def test_boolean_flags_true(mock_infer, mock_weights, tmp_path, flag, expect_key
 
 
 def test_side_by_side_toggle(mock_infer, mock_weights, tmp_path):
-    imgs = (tmp_path / "imgs"); imgs.mkdir()
-    out = (tmp_path / "out"); out.mkdir()
+    imgs = (tmp_path / "imgs")
+    imgs.mkdir()
+    out = (tmp_path / "out")
+    out.mkdir()
     rc = run_cli([
         "infer", "-i", str(imgs), "-o", str(out),
         "-w", "auto:unet-r34-4c@v0.0.2",
@@ -127,8 +129,10 @@ def test_side_by_side_toggle(mock_infer, mock_weights, tmp_path):
 
 
 def test_numeric_args_and_lists_override(mock_infer, mock_weights, tmp_path):
-    imgs = (tmp_path / "imgs"); imgs.mkdir()
-    out = (tmp_path / "out"); out.mkdir()
+    imgs = (tmp_path / "imgs")
+    imgs.mkdir()
+    out = (tmp_path / "out")
+    out.mkdir()
     rc = run_cli([
         "infer",
         "-i", str(imgs),
