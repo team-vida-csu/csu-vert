@@ -17,6 +17,7 @@ dependencies = [
   "pillow>=9",
   "tqdm>=4.66",
   "requests",
+  "PyYAML>=6.0", 
 ]
 
 [project.scripts]

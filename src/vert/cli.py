@@ -51,7 +51,7 @@ def build_parser() -> argparse.ArgumentParser:
     a.add_argument("--suppress-noise", action="store_true",
         help="If set, classes under --min-class-percent are remapped to background (0)")
 
-    a.add_argument("--class-names", default="background,forb,graminoid,woody",
+    a.add_argument("--class-names", default=None,
         help='Comma-separated class names (e.g. "background,forb,graminoid,woody"). '
              "If omitted, uses YAML if available.")
     a.add_argument("--save-mask", action="store_true",
@@ -85,17 +85,20 @@ def _merge_yaml(cfg: dict,
     std = tuple(user_std) if user_std else None
     class_names = user_classes.split(",") if user_classes else None
     palette = None
-
+    
     if cfg:
         # Normalization from YAML if not overridden
         if mean is None and cfg.get("normalize_mean"):
             m = cfg.get("normalize_mean")
             if isinstance(m, (list, tuple)) and len(m) == 3:
                 mean = tuple(float(x) for x in m)
+            
         if std is None and cfg.get("normalize_std"):
             s = cfg.get("normalize_std")
             if isinstance(s, (list, tuple)) and len(s) == 3:
                 std = tuple(float(x) for x in s)
+
+        
 
         # Class names from YAML if not overridden
         if class_names is None and cfg.get("class_names") is not None:
@@ -132,10 +135,14 @@ def main(argv=None):
 
     # default: infer
     w_path, y_path, cfg, fmt = resolve_weights(args.weights, preferred_format=args.format)
-    print(args.mean)
 
     # Merge YAML-driven defaults unless user overrides
     mean, std, class_names, palette = _merge_yaml(cfg, args.mean, args.std, args.class_names)
+
+    if mean is None:
+        mean = (0.485, 0.456, 0.406)
+    if std is None:
+        std = (0.229, 0.224, 0.225)
 
     # Log a little context
     print(f"Using weights: {w_path}")
