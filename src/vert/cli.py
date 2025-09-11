@@ -36,10 +36,10 @@ def build_parser() -> argparse.ArgumentParser:
     a.add_argument("--ext", default="png", choices=["png", "jpg", "tif", "tiff"],
         help="Output mask file extension")
 
-    a.add_argument("--mean", nargs=3, type=float, default=[0.485, 0.456, 0.406],
+    a.add_argument("--mean", nargs=3, type=float, default=None,
         help="Normalization mean override (e.g. 0.485 0.456 0.406). If omitted, uses YAML if available.")
 
-    a.add_argument("--std", nargs=3, type=float, default=[0.229, 0.224, 0.225],
+    a.add_argument("--std", nargs=3, type=float, default=None,
         help="Normalization std override (e.g. 0.229 0.224 0.225). If omitted, uses YAML if available.")
 
     a.add_argument("--csv", dest="csv_path", default=None,
@@ -132,6 +132,7 @@ def main(argv=None):
 
     # default: infer
     w_path, y_path, cfg, fmt = resolve_weights(args.weights, preferred_format=args.format)
+    print(args.mean)
 
     # Merge YAML-driven defaults unless user overrides
     mean, std, class_names, palette = _merge_yaml(cfg, args.mean, args.std, args.class_names)
