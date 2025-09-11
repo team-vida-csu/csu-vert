@@ -3,7 +3,7 @@ import sys
 from typing import Optional, List
 
 from . import infer
-from .weights import resolve_weights, list_models, precache  # <- wire weights.py
+from .weights import resolve_weights, list_models, precache 
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="csu-vert", description="UNet inference CLI")
@@ -32,9 +32,6 @@ def build_parser() -> argparse.ArgumentParser:
     a.add_argument("--overlap", type=int, default=64, help="Tile overlap (pixels)")
     a.add_argument("--batch-size", type=int, default=4, help="Tiles per batch")
     a.add_argument("--amp", action="store_true", help="Enable mixed precision on CUDA/MPS")
-
-    a.add_argument("--ext", default="png", choices=["png", "jpg", "tif", "tiff"],
-        help="Output mask file extension")
 
     a.add_argument("--mean", nargs=3, type=float, default=None,
         help="Normalization mean override (e.g. 0.485 0.456 0.406). If omitted, uses YAML if available.")
@@ -68,6 +65,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Overlay alpha (0..255, default 112)")
 
     # utility subcommands -----------------------------------------------------
+    #This lists the available models to download. (Note this list is not updated automatically)
     sub.add_parser("list-models", help="List downloadable model IDs/versions")
 
     pc = sub.add_parser("precache", help="Download/cache weights without running inference")
@@ -81,13 +79,18 @@ def _merge_yaml(cfg: dict,
                 user_mean: Optional[List[float]],
                 user_std: Optional[List[float]],
                 user_classes: Optional[str]):
+    '''
+    This function merges the data included in the downloaded yaml file so that the user does not need to declare class names and normalization values.
+    As a rule yaml values should always be over ridden by user provided values. 
+    '''
+
     mean = tuple(user_mean) if user_mean else None
     std = tuple(user_std) if user_std else None
     class_names = user_classes.split(",") if user_classes else None
     palette = None
     
     if cfg:
-        # Normalization from YAML if not overridden
+        
         if mean is None and cfg.get("normalize_mean"):
             m = cfg.get("normalize_mean")
             if isinstance(m, (list, tuple)) and len(m) == 3:
@@ -99,8 +102,6 @@ def _merge_yaml(cfg: dict,
                 std = tuple(float(x) for x in s)
 
         
-
-        # Class names from YAML if not overridden
         if class_names is None and cfg.get("class_names") is not None:
             cn = cfg["class_names"]
             if isinstance(cn, dict) and "num_classes" in cfg:
@@ -108,7 +109,6 @@ def _merge_yaml(cfg: dict,
             elif isinstance(cn, list):
                 class_names = cn
 
-        # Palette
         if cfg.get("palette") is not None and "num_classes" in cfg:
             try:
                 palette = [tuple(cfg["palette"][i]) for i in range(cfg["num_classes"])]
@@ -118,6 +118,9 @@ def _merge_yaml(cfg: dict,
     return mean, std, class_names, palette
 
 def main(argv=None):
+    '''
+    Main function for the cli portion of the application. Infer is treated as the default option over list-models/precache. 
+    '''
     parser = build_parser()
     args = parser.parse_args(argv)
 
@@ -133,7 +136,6 @@ def main(argv=None):
             print(f"Cached config: {y}")
         return 0
 
-    # default: infer
     w_path, y_path, cfg, fmt = resolve_weights(args.weights, preferred_format=args.format)
 
     # Merge YAML-driven defaults unless user overrides
@@ -144,7 +146,6 @@ def main(argv=None):
     if std is None:
         std = (0.229, 0.224, 0.225)
 
-    # Log a little context
     print(f"Using weights: {w_path}")
     if y_path:
         print(f"Using config : {y_path}")
@@ -158,7 +159,7 @@ def main(argv=None):
     infer.run_folder(
         input=args.input,
         output=args.output,
-        weights=str(w_path),     # resolved local file path
+        weights=str(w_path),
         device=args.device,
         tile_size=args.tile_size,
         overlap=args.overlap,
@@ -166,7 +167,6 @@ def main(argv=None):
         amp=args.amp,
         mean=mean,
         std=std,
-        ext=args.ext,
         csv_path=args.csv_path,
         min_class_percent=args.min_class_percent,
         suppress_noise=args.suppress_noise,

@@ -23,7 +23,7 @@ def has_torch():
     
 
 def require_torch(why: str = "TorchScript (.pt) inference"):
-    """Raise a friendly error if torch isn't available."""
+    """Raise a error if torch isn't available. Catches situations where torch weights are being used without torch installed."""
     torch = has_torch()
     if torch is None:
         raise RuntimeError(
@@ -40,6 +40,8 @@ def _resolve_device(requested: str, prefer_torch: bool) -> str:
     """
     Resolve 'auto' to a specific device.
     If prefer_torch=False (e.g., ONNX path), don't force importing torch.
+    mps option refers to torch on apple sillicon which is handled differently than cuda.
+    cpu treated and the fallback so application doesn't have to deal with cuda errors. 
     """
     if requested != "auto":
         return requested
@@ -52,19 +54,18 @@ def _resolve_device(requested: str, prefer_torch: bool) -> str:
     if torch is None:
         return "cpu"
 
-    if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():  # Apple Silicon
+    if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
         return "mps"
     if torch.cuda.is_available():
         return "cuda"
     return "cpu"
 
 
-# -----------------------
-# Entry point
-# -----------------------
 
 def _default_palette(C: int) -> List[Tuple[int, int, int]]:
-    # A small, distinct set; extends deterministically if C>8
+    '''Set of basic colors used for ouput masks. 
+        Can be generate more colors to avoid errors where more than 8 classes are given.
+    '''
     base = [
         (0, 0, 0),       # background
         (74, 222, 128),  # green
@@ -77,7 +78,7 @@ def _default_palette(C: int) -> List[Tuple[int, int, int]]:
     ]
     if C <= len(base):
         return base[:C]
-    # repeat with a simple permutation if more classes needed
+    
     out = base[:]
     rng = np.random.default_rng(42)
     while len(out) < C:
@@ -85,6 +86,9 @@ def _default_palette(C: int) -> List[Tuple[int, int, int]]:
         out.append(rgb)
     return out[:C]
 
+# -----------------------
+# Entry point
+# -----------------------
 
 def run_folder(
     input: str,
@@ -102,14 +106,13 @@ def run_folder(
     min_class_percent: float = 0.0,
     suppress_noise: bool = False,
     class_names: Optional[List[str]] = ["background", "forb", "graminoid", "woody"],
-    ext: str = "png",
     save_mask: bool = False,
     save_overlay: bool = False,
     overlay_alpha: int = 112,
     overlay_suffix: str = "_overlay",
     save_side_by_side: bool = True,
     side_by_side_suffix: str = "_side",
-    side_separator_px: int = 6,   # vertical separator width
+    side_separator_px: int = 6,
     
 ) -> None:
     """
@@ -137,8 +140,14 @@ def run_folder(
         If True, remap tiny classes to background (0) before saving.
     class_names : Optional[List[str]]
         Names for classes used in CSV headers.
-    ext : str
-        Output extension without dot: "png" (default), "jpg", "tif", "tiff".
+    save_mask : bool
+        If True, save the prediction mask in the output folder
+    save_overlay : bool
+        If True, save the predictions transparently overlayed on orginal image.
+    overlay_alpha : int 
+        Adjust the overlays alpha value. Default 112.
+    save_side_by_side : bool
+        If true, save a image of the original image and the mask side by side with a key for comparison.
     """
     import csv
     
@@ -241,7 +250,7 @@ def run_folder(
             if save_mask:
                 _save_indexed_mask(
                     mask_idx,
-                    out_path=out_dir / f"{Path(f).stem}.{ext}",
+                    out_path=out_dir / f"{Path(f).stem}.png",
                     palette=pal_eff,
                 )
 
@@ -256,9 +265,9 @@ def run_folder(
                     class_names=class_names,
     )
 
-            # Save RGBA overlay (PNG) for quick visual QA
+           
             if save_overlay:
-                overlay_path = out_dir / f"{Path(f).stem}{overlay_suffix}.png"  # PNG to keep alpha
+                overlay_path = out_dir / f"{Path(f).stem}{overlay_suffix}.png" 
                 _save_overlay_rgba(
                     img_rgb01=img_orig,               # original image in [0,1], HxWx3
                     mask_idx=mask_idx,           # HxW uint8
@@ -473,15 +482,14 @@ def _render_legend_row(
     width: int,
     img_height: int,
     *,
-    legend_height_frac: float = 0.12,     # 12% of image height
+    legend_height_frac: float = 0.12,   
     min_leg_h: int = 80,
     max_leg_h: int = 240,
-    skip_bg_index: Optional[int] = None,     # e.g., 0 to hide background
+    skip_bg_index: Optional[int] = None,  
 ) -> Image.Image:
     """
     Responsive horizontal legend bar: big font, wide swatches, evenly spaced.
     """
-    # Optionally drop background entry
     indices = list(range(len(palette)))
     if skip_bg_index is not None and 0 <= skip_bg_index < len(indices):
         indices.pop(skip_bg_index)
@@ -490,7 +498,6 @@ def _render_legend_row(
     # Legend height scales with image height, clamped
     leg_h = int(max(min(img_height * legend_height_frac, max_leg_h), min_leg_h))
 
-    # Canvas
     legend = Image.new("RGB", (width, leg_h), (255, 255, 255))
     draw = ImageDraw.Draw(legend)
 
@@ -510,10 +517,8 @@ def _render_legend_row(
                 else f"class_{cls_idx}")
         color = tuple(int(c) for c in palette[cls_idx])
 
-        # Center of this slot
         cx = k * slot_w + slot_w // 2
 
-        # Lay out swatch near top, text below it
         sw_y0 = pad_y
         sw_y1 = sw_y0 + swatch_h
         sw_x0 = cx - swatch_w // 2
@@ -567,7 +572,7 @@ def _save_side_by_side(
     if add_legend:
         legend = _render_legend_row(
             palette, class_names, width=sbs_img.width, img_height=sbs_img.height,
-            legend_height_frac=0.12,          # bump to 0.15 if you want even larger
+            legend_height_frac=0.12,        
             skip_bg_index=0 if skip_bg_in_legend else None,
         )
         out = Image.new("RGB", (sbs_img.width, sbs_img.height + legend.height), (255, 255, 255))

@@ -146,7 +146,6 @@ def test_numeric_args_and_lists_override(mock_infer, mock_weights, tmp_path):
         "--std", "0.2", "0.2", "0.2",
         "--class-names", "bg,aa,bb,cc",
         "--csv", str(out / "stats.csv"),
-        "--ext", "jpg",
         "--device", "cpu",
         "--format", "pt",
     ])
@@ -160,7 +159,6 @@ def test_numeric_args_and_lists_override(mock_infer, mock_weights, tmp_path):
     assert tuple(kwargs["std"]) == (0.2, 0.2, 0.2)
     assert kwargs["class_names"] == ["bg", "aa", "bb", "cc"]
     assert kwargs["csv_path"].endswith("stats.csv")
-    assert kwargs["ext"] == "jpg"
     assert kwargs["device"] == "cpu"
 
 
