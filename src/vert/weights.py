@@ -48,6 +48,29 @@ MODELS: Dict[Tuple[str, str], ModelEntry] = {
             "vert-model.yaml": "09affdc7b905f21b255f5bc7c14ea5e7e55984de11b5f88e195162b19ba29865",
         },
     ),
+    ("unet-r34-5c-pt",   "v0.1.2"): ModelEntry(
+        format="pt",
+        weight_name="vert-unet_resnet34_5cls_scripted.pt",
+        yaml_name="vert-model-5cls.yaml",
+        gh_owner="team-vida-csu",
+        gh_repo="csu-vert",
+        sha256={
+            "vert-unet_resnet34_5cls_scripted.pt": "4129f384186e1c3a0349a579a7a2dce43b4b191e4680c74127a9bdc34d5db95c",
+            "vert-model-5cls.yaml": "bf211d25abb4aea896ea8612c4819234a2e87ef0da0396503a4b01c53d360e09",
+        },
+    ),
+    ("unet-r34-5c-onnx",   "v0.1.2"): ModelEntry(
+        format="onnx",
+        weight_name="vert-unet_resnet34_5cls.onnx",
+        yaml_name="vert-model-5cls.yaml",
+        gh_owner="team-vida-csu",
+        gh_repo="csu-vert",
+        sha256={
+            "vert-unet_resnet34_5cls_scripted.onnx": "785cddef583f31668ce1bd8f39404c8f69f31b0d8a77cde1eca49f48a5188f83",
+            "vert-model-5cls.yaml": "bf211d25abb4aea896ea8612c4819234a2e87ef0da0396503a4b01c53d360e09",
+        },
+    ),
+
 }
 
 # -----------------------------
