@@ -122,6 +122,16 @@ def main(argv=None):
     Main function for the cli portion of the application. Infer is treated as the default option over list-models/precache. 
     '''
     parser = build_parser()
+
+    # If user runs "csu-vert" with no arguments → print help instead of error
+    if argv is None:
+        argv = sys.argv[1:]
+
+    if len(argv) == 0:
+        parser.print_help()
+        return 0
+    
+    # If args are provided parse
     args = parser.parse_args(argv)
 
     if args.cmd == "list-models":

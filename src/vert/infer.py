@@ -217,7 +217,6 @@ def run_folder(
             # Histogram BEFORE suppression
             counts = np.bincount(mask_idx.ravel(), minlength=C).astype(int)
             percents = (counts / max(total, 1)) * 100.0
-            print("pred histogram:", dict(enumerate(counts.tolist())))
 
             # Optional noise suppression
             if suppress_noise and min_class_percent > 0.0:

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, date
 from pathlib import Path
 from typing import Dict, Optional, Tuple, List
 import hashlib
@@ -23,6 +24,7 @@ class ModelEntry:
     gh_owner: str            # GitHub owner/org
     gh_repo: str             # GitHub repo name
     sha256: Optional[Dict[str, str]] = None  # filename -> sha256
+    date_added: Optional[str] = None # YYYY-MM-DD
 
 # key = (model_id, version)
 MODELS: Dict[Tuple[str, str], ModelEntry] = {
@@ -36,6 +38,7 @@ MODELS: Dict[Tuple[str, str], ModelEntry] = {
             "vert-unet_resnet34_4cls_scripted.pt": "efd642f25b554e101d26c6c2ba7c2b02870eee896fb47147c2bfe4511ea7c3cc",
             "vert-model.yaml": "09affdc7b905f21b255f5bc7c14ea5e7e55984de11b5f88e195162b19ba29865",
         },
+        date_added="2025-04-09",
     ),
     ("unet-r34-4c-onnx", "v0.0.2"): ModelEntry(
         format="onnx",
@@ -47,6 +50,7 @@ MODELS: Dict[Tuple[str, str], ModelEntry] = {
             "vert-unet_resnet34_4cls.onnx": "0b1951a6c6989fd88b847cbeccb53b05c80469d5e603a48169fcc1f201f0eaae",
             "vert-model.yaml": "09affdc7b905f21b255f5bc7c14ea5e7e55984de11b5f88e195162b19ba29865",
         },
+        date_added="2025-04-09",
     ),
     ("unet-r34-5c-pt",   "v0.1.2"): ModelEntry(
         format="pt",
@@ -58,6 +62,7 @@ MODELS: Dict[Tuple[str, str], ModelEntry] = {
             "vert-unet_resnet34_5cls_scripted.pt": "4129f384186e1c3a0349a579a7a2dce43b4b191e4680c74127a9bdc34d5db95c",
             "vert-model-5cls.yaml": "bf211d25abb4aea896ea8612c4819234a2e87ef0da0396503a4b01c53d360e09",
         },
+        date_added="2025-11-08",
     ),
     ("unet-r34-5c-onnx",   "v0.1.2"): ModelEntry(
         format="onnx",
@@ -69,6 +74,7 @@ MODELS: Dict[Tuple[str, str], ModelEntry] = {
             "vert-unet_resnet34_5cls_scripted.onnx": "785cddef583f31668ce1bd8f39404c8f69f31b0d8a77cde1eca49f48a5188f83",
             "vert-model-5cls.yaml": "bf211d25abb4aea896ea8612c4819234a2e87ef0da0396503a4b01c53d360e09",
         },
+        date_added="2025-11-08",
     ),
 
 }
@@ -117,11 +123,44 @@ def resolve_weights(
 
 
 def list_models() -> List[str]:
-    """Human-readable registry summary."""
-    out = []
-    for (mid, ver), e in sorted(MODELS.items()):
-        out.append(f"{mid}@{ver}  [{e.format}]  {e.weight_name}")
-    return out
+    """
+    Returns a human-readable, grouped list:
+    - Grouped by date_added (newest first)
+    - Within a date group, sorted by (model_id, version)
+    - Includes section headers like '=== 2025-02-18 ==='
+    """
+    def _parse_date(s: Optional[str]) -> date:
+        if not s:
+            return date.min
+        try:
+            return datetime.strptime(s, "%Y-%m-%d").date()
+        except Exception:
+            return date.min
+
+    # Build a mapping: date -> list[(mid, ver, entry)]
+    grouped: Dict[date, List[Tuple[str, str, ModelEntry]]] = {}
+    for (mid, ver), e in MODELS.items():
+        d = _parse_date(e.date_added)
+        grouped.setdefault(d, []).append((mid, ver, e))
+
+    lines: List[str] = []
+    # Sort dates descending (newest first)
+    for d in sorted(grouped.keys(), reverse=True):
+        # Header per date; use placeholder if unspecified
+        header = f"=== {d.isoformat() if d != date.min else 'unspecified'} ==="
+        lines.append(header)
+
+        # Sort entries within the date group for stable output
+        for mid, ver, e in sorted(grouped[d], key=lambda t: (t[0], t[1])):
+            lines.append(f"{mid}@{ver}  [{e.format}]  {e.weight_name}")
+
+        # add a blank line between groups (purely cosmetic)
+        lines.append("")
+
+    if lines and lines[-1] == "":
+        lines.pop()  # tidy trailing blank line
+
+    return lines
 
 
 def precache(spec: str, preferred_format: str = "auto") -> Tuple[Path, Optional[Path]]:
