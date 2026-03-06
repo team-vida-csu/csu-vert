@@ -105,7 +105,7 @@ def run_folder(
     csv_path: Optional[str] = None,
     min_class_percent: float = 0.0,
     suppress_noise: bool = False,
-    class_names: Optional[List[str]] = ["background", "forb", "graminoid", "woody"],
+    class_names: Optional[List[str]] = ["Background", "Forb", "Graminoid", "Woody"],
     save_mask: bool = False,
     save_overlay: bool = False,
     overlay_alpha: int = 112,
