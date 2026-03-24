@@ -54,6 +54,18 @@ dev = [
   "types-tqdm",
 ]
 
+# Training requirements (use for running notebook)
+training = [
+  "pandas",
+  "numpy>=1.26,<2.0",
+  "matplotlib",
+  "tqdm",
+  "Pillow",
+  "torch>=2.3,<3.0",
+  "torchvision>=0.18,<1.0",
+  "segmentation-models-pytorch",
+]
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/vert"]
 
